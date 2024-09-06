@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Website Kelola Data</title>
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        background: #020202;
+        cursor: crosshair;
+        overflow: hidden;
+      }
+
+      canvas {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: -1;
+      }
+
+      .content {
+        position: relative;
+        z-index: 1;
+      }
+
+      @keyframes spin-slow {
+        0% {
+          transform: rotate(0deg);
+        }
+
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .animate-spin-slow {
+        animation: spin-slow 10s linear infinite;
+      }
+
+      @keyframes floatBalloon {
+        0% {
+          transform: translateY(100vh);
+          opacity: 0;
+        }
+
+        50% {
+          opacity: 1;
+        }
+
+        100% {
+          transform: translateY(-150px);
+          opacity: 1;
+        }
+      }
+
+      #giftBoxContainer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        transition: opacity 1s ease-in-out;
+      }
+
+      #giftBox {
+        width: 200px;
+        height: 200px;
+        background-color: #ff69b4;
+        border: 5px solid #ff1493;
+        position: relative;
+        cursor: pointer;
+        transition: transform 0.3s ease, opacity 0.5s ease;
+      }
+
+      #giftBox:hover {
+        transform: scale(1.05);
+      }
+
+      #giftBox::before {
+        content: "";
+        position: absolute;
+        top: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40px;
+        height: 40px;
+        background-color: #ff1493;
+        border-radius: 50%;
+      }
+
+      #giftBox::after {
+        content: "Buka Kado";
+        position: absolute;
+        bottom: -30px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 18px;
+        color: white;
+      }
+
+      #birthdayContent {
+        opacity: 0;
+        transition: opacity 1s ease-in-out;
+      }
+
+      .fade-out {
+        opacity: 0 !important;
+      }
+
+      .fade-in {
+        opacity: 1 !important;
+      }
+    </style>
+  </head>
+
+  <body class="bg-blue-900 flex items-center justify-center min-h-screen px-4">
+    <canvas id="birthday"></canvas>
+
+    <div id="giftBoxContainer">
+      <div id="giftBox" onclick="openGift()"></div>
+    </div>
+
+    <div
+      id="birthdayContent"
+      class="content text-center relative w-full max-w-lg"
+    >
+      <h1
+        class="text-4xl sm:text-5xl font-bold text-pink-500 animate-bounce mb-6 sm:mb-8"
+      >
+        🎉 Selamat Ulang Tahun, Verena! 🎉
+      </h1>
+
+      <img
+        src="WhatsApp Image 2024-09-06 at 04.12.22_76ee068a.jpg"
+        alt="Foto Verena"
+        class="rounded-full w-32 h-32 sm:w-48 sm:h-48 mx-auto my-4 sm:my-5 animate-spin-slow border-4 border-pink-500"
+      />
+
+      <p class="text-lg sm:text-xl italic text-white mb-6 sm:mb-8">
+        Semoga panjang umur, sehat selalu, dan bahagia!
+      </p>
+
+      <button
+        id="congratsBtn"
+        class="bg-pink-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full shadow-lg text-xl sm:text-2xl font-semibold hover:bg-pink-600 transition duration-300 ease-in-out animate-bounce"
+      >
+        🎈 Pencet 3 Kali 🎈
+      </button>
+
+      <div id="wishesContainer" class="mt-6 sm:mt-8">
+        <p id="wish1" class="text-white text-lg sm:text-xl mb-2 hidden">
+          Selamat ulang tahun, Verena! Semoga hari ini membawa kebahagiaan dan
+          sukacita yang tak terhingga. Terus semangat dan bersinar terang!
+          Semoga tahun ini penuh dengan kebahagiaan yang melimpah ruah! Semoga
+          semua impianmu terbang tinggi dan jadi kenyataan! 🌟✨
+        </p>
+      </div>
+
+      <div
+        id="balloonContainer"
+        class="fixed inset-0 pointer-events-none"
+      ></div>
+    </div>
+
+    <audio id="birthdaySong" src="jambrud_selamat_ulang_tahun.mp3" loop></audio>
+
+    <script>
+      // helper functions
+      const PI2 = Math.PI * 2;
+      const random = (min, max) => (Math.random() * (max - min + 1) + min) | 0;
+      const timestamp = (_) => new Date().getTime();
+
+      // container
+      class Birthday {
+        constructor() {
+          this.resize();
+
+          // create a lovely place to store the firework
+          this.fireworks = [];
+          this.counter = 0;
+        }
+
+        resize() {
+          this.width = canvas.width = window.innerWidth;
+          let center = (this.width / 2) | 0;
+          this.spawnA = (center - center / 4) | 0;
+          this.spawnB = (center + center / 4) | 0;
+
+          this.height = canvas.height = window.innerHeight;
+          this.spawnC = this.height * 0.1;
+          this.spawnD = this.height * 0.5;
+        }
+
+        onClick(evt) {
+          let x = evt.clientX || (evt.touches && evt.touches[0].pageX);
+          let y = evt.clientY || (evt.touches && evt.touches[0].pageY);
+
+          let count = random(3, 5);
+          for (let i = 0; i < count; i++)
+            this.fireworks.push(
+              new Firework(
+                random(this.spawnA, this.spawnB),
+                this.height,
+                x,
+                y,
+                random(0, 260),
+                random(30, 110)
+              )
+            );
+
+          this.counter = -1;
+        }
+
+        update(delta) {
+          ctx.globalCompositeOperation = "hard-light";
+          ctx.fillStyle = `rgba(20,20,20,${7 * delta})`;
+          ctx.fillRect(0, 0, this.width, this.height);
+
+          ctx.globalCompositeOperation = "lighter";
+          for (let firework of this.fireworks) firework.update(delta);
+
+          // if enough time passed... create new new firework
+          this.counter += delta * 3; // each second
+          if (this.counter >= 1) {
+            this.fireworks.push(
+              new Firework(
+                random(this.spawnA, this.spawnB),
+                this.height,
+                random(0, this.width),
+                random(this.spawnC, this.spawnD),
+                random(0, 360),
+                random(30, 110)
+              )
+            );
+            this.counter = 0;
+          }
+
+          // remove the dead fireworks
+          if (this.fireworks.length > 1000)
+            this.fireworks = this.fireworks.filter(
+              (firework) => !firework.dead
+            );
+        }
+      }
+
+      class Firework {
+        constructor(x, y, targetX, targetY, shade, offsprings) {
+          this.dead = false;
+          this.offsprings = offsprings;
+
+          this.x = x;
+          this.y = y;
+          this.targetX = targetX;
+          this.targetY = targetY;
+
+          this.shade = shade;
+          this.history = [];
+        }
+        update(delta) {
+          if (this.dead) return;
+
+          let xDiff = this.targetX - this.x;
+          let yDiff = this.targetY - this.y;
+          if (Math.abs(xDiff) > 3 || Math.abs(yDiff) > 3) {
+            // is still moving
+            this.x += xDiff * 2 * delta;
+            this.y += yDiff * 2 * delta;
+
+            this.history.push({
+              x: this.x,
+              y: this.y,
+            });
+
+            if (this.history.length > 20) this.history.shift();
+          } else {
+            if (this.offsprings && !this.madeChilds) {
+              let babies = this.offsprings / 2;
+              for (let i = 0; i < babies; i++) {
+                let targetX =
+                  (this.x + this.offsprings * Math.cos((PI2 * i) / babies)) | 0;
+                let targetY =
+                  (this.y + this.offsprings * Math.sin((PI2 * i) / babies)) | 0;
+
+                birthday.fireworks.push(
+                  new Firework(this.x, this.y, targetX, targetY, this.shade, 0)
+                );
+              }
+            }
+            this.madeChilds = true;
+            this.history.shift();
+          }
+
+          if (this.history.length === 0) this.dead = true;
+          else if (this.offsprings) {
+            for (let i = 0; this.history.length > i; i++) {
+              let point = this.history[i];
+              ctx.beginPath();
+              ctx.fillStyle = "hsl(" + this.shade + ",100%," + i + "%)";
+              ctx.arc(point.x, point.y, 1, 0, PI2, false);
+              ctx.fill();
+            }
+          } else {
+            ctx.beginPath();
+            ctx.fillStyle = "hsl(" + this.shade + ",100%,50%)";
+            ctx.arc(this.x, this.y, 1, 0, PI2, false);
+            ctx.fill();
+          }
+        }
+      }
+
+      let canvas = document.getElementById("birthday");
+      let ctx = canvas.getContext("2d");
+
+      let then = timestamp();
+
+      let birthday = new Birthday();
+      window.onresize = () => birthday.resize();
+      document.onclick = (evt) => birthday.onClick(evt);
+      document.ontouchstart = (evt) => birthday.onClick(evt);
+      (function loop() {
+        requestAnimationFrame(loop);
+
+        let now = timestamp();
+        let delta = now - then;
+
+        then = now;
+        birthday.update(delta / 1000);
+      })();
+
+      function openGift() {
+        var giftBoxContainer = document.getElementById("giftBoxContainer");
+        var birthdayContent = document.getElementById("birthdayContent");
+        var giftBox = document.getElementById("giftBox");
+        var audio = document.getElementById("birthdaySong");
+
+        giftBox.style.transform = "scale(1.2)";
+        giftBox.style.opacity = "0";
+
+        setTimeout(() => {
+          giftBoxContainer.classList.add("fade-out");
+          birthdayContent.classList.add("fade-in");
+
+          setTimeout(() => {
+            giftBoxContainer.style.display = "none";
+            audio.play(); // Mulai memutar lagu saat kado dibuka
+            startBirthdayCelebration();
+          }, 100);
+        }, 500);
+      }
+
+      function startBirthdayCelebration() {
+        var audio = document.getElementById("birthdaySong");
+        var congratsBtn = document.getElementById("congratsBtn");
+        var balloonContainer = document.getElementById("balloonContainer");
+        var wishesContainer = document.getElementById("wishesContainer");
+        var wishes = [
+          document.getElementById("wish1"),
+          document.getElementById("wish2"),
+        ];
+        var currentWish = 0;
+
+        congratsBtn.addEventListener("click", function () {
+          audio.play();
+          showNextWish();
+          showBalloons();
+        });
+
+        function showNextWish() {
+          if (currentWish < wishes.length) {
+            wishes[currentWish].classList.remove("hidden");
+            currentWish++;
+          }
+        }
+
+        function showBalloons() {
+          for (let i = 0; i < 5; i++) {
+            let balloon = document.createElement("div");
+            balloon.className = "balloon";
+            balloon.style.left = Math.random() * 100 + "vw";
+            balloon.style.animationDelay = Math.random() * 5 + "s";
+            balloonContainer.appendChild(balloon);
+          }
+        }
+      }
+    </script>
+  </body>
+</html>
